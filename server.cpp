@@ -18,8 +18,6 @@ void handle_client(int c_fd){
         if(n<0){
                 perror("Couldn't write data to the socket\n");
         }
-
-        close(c_fd);
 }
 
 int main(){
