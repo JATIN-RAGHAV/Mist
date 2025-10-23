@@ -20,11 +20,13 @@ int main(){
         int n = bind(fd,(const struct sockaddr*)&addr, sizeof(addr));
         if(n){
                 perror("Couldn't bind.");
+                exit(1);
         }
 
         n = listen(fd,20);
         if(n){
                 perror("Couldnt' listen.");
+                exit(1);
         }
         printf("Server is listening.\n");
         
@@ -70,15 +72,17 @@ int main(){
                                 handle_read(fds[poll_list[i].fd]);
                         }
                         if(result & POLLOUT){
+
                                 handle_write(fds[poll_list[i].fd]);
                         }
 
                         int s = poll_list[i].fd;
-                        if(fds[s]->want_close || (poll_list[i].revents & POLLERR)){
+                        if((fds[s]->want_close && !fds[s]->want_write) || (result & POLLERR)){
                                 close(s);
+                                printf("Connection closed with: %s:%d\n",fds[s]->addr,fds[s]->port);
+                                delete fds[s]->addr;
                                 delete fds[s];
                                 fds[s] = NULL;
-                                printf("Client wants to close the connection.\n");
                                 fflush(stdout);
                         }
                 }

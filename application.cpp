@@ -1,10 +1,12 @@
 #include "struct.hpp"
+#include <sstream>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <string>
 #include <stdio.h>
+#include <arpa/inet.h>
 
 using std::string;
 const int buf_size = 1024;
@@ -27,8 +29,8 @@ string parse(vector<uint8_t>& read){
                 return res;
         }
         int len = get_len(read.data());
-        if(len+4 == read.size()){
-                res.insert(res.end(),read.begin()+4,read.end());
+        if(len+4 <= read.size()){
+                res.insert(res.end(),read.begin()+4,read.begin()+4+len);
         }
         return res;
 }
@@ -48,15 +50,19 @@ vector<uint8_t> get_res(string str){
 }
 
 void process_payload(string& str,Conn* con){
-        con->want_read = false;
-        con->read.clear();
+        auto&read = con->read;
+        con->want_write = true;
+        read.erase(read.begin(),read.begin()+(4+str.size()));
         if(str == "exit"){
+                con->want_read = false;
                 con->want_close = true;
                 return;
         }
-        printf("Client says: %s\n",str.data());
+        printf("%s:%d says: %s\n",con->addr,con->port,str.data());
         con->want_write = true;
-        con->write = get_res("Hello from server.");
+        auto s = get_res(string("Hello"));
+        auto& write = con->write;
+        write.insert(write.end(),s.begin(),s.end());
 }
 
 Conn* handle_accept(int fd){
@@ -73,6 +79,12 @@ Conn* handle_accept(int fd){
         make_non_block(c_fd);
         con->fd = c_fd;
         con->want_read = true;
+        char* s_addr = new char[INET_ADDRSTRLEN+1];
+        s_addr[INET_ADDRSTRLEN] = 0;
+        inet_ntop(AF_INET,&(addr.sin_addr),s_addr,INET_ADDRSTRLEN);
+        con->addr = s_addr;
+        con->port = addr.sin_port;
+        printf("New connection stablished with: %s:%d\n",con->addr,con->port);
         return con;
 }
 
@@ -86,28 +98,33 @@ void handle_read(Conn* con){
         }
 
         con->read.insert(con->read.end(),rbuf,rbuf+n);
+        
         string payload = parse(con->read);
-        if(payload.size()){
+        while(payload.size()){
                 process_payload(payload,con);
+                payload = parse(con->read);
         }
 }
 
 void handle_write(Conn* con){
-        int n = write(con->fd,con->write.data(),con->write.size());
-        if(n<0){
-                perror("Unable to write");
-                con->want_close = true;
-                return;
+        auto&write_buf = con->write;
+        if(write_buf.size()){
+                int n = write(con->fd,con->write.data(),con->write.size());
+                if(n<0){
+                        if(errno == EINTR)return;
+                        perror("Unable to write");
+                        con->want_close = true;
+                        con->want_write = false;
+                        con->want_read = false;
+                        return;
+                }
+                auto&write = con->write;
+                write.erase(write.begin(),write.begin()+n);
+                if(!write.size()){
+                        con->want_write = false;
+                }
         }
-        auto&write = con->write;
-        // printf("Written: %d\n",n);
-        // printf("len: %d\n",(int)write.size());
-        // printf("%s",write.data());
-        if(n==con->write.size()){
+        else{
                 con->want_write = false;
-                con->want_read = true;
-                con->write.clear();
-                return;
         }
-        write.erase(write.begin(),write.begin()+n);
 }
