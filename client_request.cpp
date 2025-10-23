@@ -3,31 +3,13 @@
 #include <netinet/in.h>
 #include <stdio.h>
 #include "format.cpp"
+#include <string>
 
-static const int MAX_BUF = 4096;
-
-int talk(int fd,const char* msg){
-        char wbuf[4+MAX_BUF] = {};
-        int sz = strlen(msg);
-        memcpy(wbuf+4,msg,sz);
-        write_len(sz,wbuf);
-
-        int n = write_all(fd, wbuf,4+sz);
-        if(n<0){
-                return -1;
-        }
+int talk(int fd,std::string msg){
+        write_to(fd,msg);
 
         char rbuf[MAX_BUF] = {};
-        int len = parse_len(fd);
-        if(len<0){
-                return -1;
-        }
-
-        n = read_all(fd, rbuf,len);
-        if(n<0){
-                return -1;
-        }
-
+        read_from(fd,rbuf);
         printf("Server says: %s\n",rbuf);
         return 0;
 }
