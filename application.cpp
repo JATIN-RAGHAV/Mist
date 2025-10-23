@@ -60,7 +60,7 @@ void process_payload(string& str,Conn* con){
         }
         printf("%s:%d says: %s\n",con->addr,con->port,str.data());
         con->want_write = true;
-        auto s = get_res(string("Hello"));
+        auto s = get_res(string("Hello")+' '+string(con->addr)+':'+std::to_string(con->port));
         auto& write = con->write;
         write.insert(write.end(),s.begin(),s.end());
 }
