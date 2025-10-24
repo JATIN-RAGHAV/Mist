@@ -8,6 +8,7 @@
 #include <chrono>
 #include <random>
 #include <thread>
+#include <mutex>
 
 void test();
 
@@ -16,9 +17,11 @@ int main(){
                 std::thread new_thread(test);
                 new_thread.detach();
         }
-        sleep(30);
+        sleep(50);
 }
 int i = 0;
+
+std::mutex lock_func;
 
 void test(){
         int fd = socket(AF_INET,SOCK_STREAM,0);
@@ -26,11 +29,13 @@ void test(){
         addr.sin_family = AF_INET;
         addr.sin_port = htons(1234);
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        lock_func.lock();
         std::vector<std::string> msgs = {"first","second","Third.","Fourth","exit"};
         std::mt19937 eng(std::chrono::high_resolution_clock::now().time_since_epoch().count()+i++);
         std::uniform_int_distribution<int> dist(1,2);
         sleep(dist(eng));
         int n = connect(fd, (struct sockaddr*)&addr,sizeof(addr));
+        lock_func.unlock();
         if(n){
                 perror("Can't connect to the server.");
                 exit(1);
