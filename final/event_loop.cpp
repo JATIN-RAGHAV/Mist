@@ -82,7 +82,7 @@ int main(){
                                 handle_write(con);
                         }
                         
-                        if((result & POLLERR) || (con->want_close && !con->want_write)){
+                        if((result & POLLERR) || con->want_close){
                                 close(con->fd);
                                 std::cout << "Closing connection with: " << con->ip << ':' << con->port << ".\n";
                                 fds[con->fd] = NULL;

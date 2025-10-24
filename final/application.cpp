@@ -1,3 +1,4 @@
+#include <cassert>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -27,6 +28,7 @@ void gen_response(std::string res,Conn* con){
         set_len(res.size(),writer.end()-4);
 
         writer.insert(writer.end(),res.begin(),res.end());
+        con->want_write = true;
 }
 
 void execute_command(std::vector<std::string>& cmd,Conn* con){
@@ -106,6 +108,10 @@ void handle_read(Conn* con){
                 kill_this(con);
                 return;
         }
+        if(!n && !(errno&EINTR)){
+                kill_this(con);
+                return;
+        }
         
         auto& reader = con->reader;
         reader.insert(reader.end(),rbuf,rbuf+n);
@@ -119,4 +125,19 @@ void handle_read(Conn* con){
         }
 }
 
-void handle_write(Conn* con);
+void handle_write(Conn* con){
+        auto&writer = con->writer;
+        errno = 0;
+        int n = write(con->fd,writer.data(),writer.size());
+        if(n < 0 && errno&EINTR){
+                return;
+        }
+        if(n < 0){
+                kill_this(con);
+                return;
+        }
+
+        assert(n <= writer.size());
+
+        writer.erase(writer.begin(),writer.begin()+n);
+}
