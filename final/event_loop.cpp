@@ -6,7 +6,7 @@
 #include <poll.h>
 #include <iostream>
 #include <unistd.h>
-#include "struct.hpp"
+#include "common.cpp"
 #include "application.cpp"
 
 const int PORT = 4237;

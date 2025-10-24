@@ -1,7 +1,122 @@
-#include "struct.hpp"
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <algorithm>
+#include <cctype>
+#include "common.cpp"
+#include "data.cpp"
 
-Conn* handle_accept(int fd);
+#define MAX 4096
+constexpr char FULL_BYTE = char((1<<8)-1);
+const std::string empty_sz = std::string("    ");
 
-void handle_read(Conn* con);
+void kill_this(Conn* con){
+        con->want_close = true;
+        con->want_read = false;
+        con-> want_write = false;
+        con->writer.clear();
+        con->reader.clear();
+}
+
+void gen_response(std::string res,Conn* con){
+        auto& writer = con->writer;
+        writer.push_back(FULL_BYTE);
+
+        writer.insert(writer.end(),empty_sz.begin(),empty_sz.end());
+        set_len(res.size(),writer.end()-4);
+
+        writer.insert(writer.end(),res.begin(),res.end());
+}
+
+void execute_command(std::vector<std::string>& cmd,Conn* con){
+        std::transform(cmd[0].begin(),cmd[0].begin(),cmd[0].end(),::tolower);
+        if(cmd.size() == 2){
+                if(cmd[0] == "get"){
+                        if(data.count(cmd[1])){
+                                gen_response(data[cmd[1]],con);
+                        }
+                        else{
+                                kill_this(con);
+                        }
+                }
+                else if(cmd[0] == "del"){
+                        data.erase(cmd[1]);
+                        gen_response("",con);
+                }
+                else{
+                        kill_this(con);
+                }
+                return;
+        }
+        if(cmd.size() == 3 && cmd[0] == "set"){
+                data[cmd[1]] = cmd[2];
+                gen_response("",con);
+        }
+        else{
+                kill_this(con);
+        }
+}
+
+void process_request(Conn* con){
+        auto& reader = con->reader;
+        int arg_cnt = get_len(reader.begin());
+        std::vector<std::string>cmd;
+        auto it = reader.begin();
+        while(it < reader.end()){
+                int len = get_len(it);
+                it+=4;
+                cmd.push_back(std::string{it,it+len});
+                it+=len;
+        }
+        execute_command(cmd,con);
+}
+
+Conn* handle_accept(int fd){
+        struct sockaddr_in addr = {};
+        socklen_t len = sizeof(addr);
+        int c_fd = accept(fd, (struct sockaddr*)&addr, &len);
+        if(c_fd < 0){
+                return NULL;
+        }
+        Conn* con = new(Conn);
+        con->fd = c_fd;
+        con->want_read = true;
+        con->port = ntohs(addr.sin_port);
+
+        char* ip = new(char[INET_ADDRSTRLEN+1]);
+        ip[INET_ADDRSTRLEN] = 0;
+        if(inet_ntop(AF_INET, &addr.sin_addr, ip, INET_ADDRSTRLEN)){
+                con->ip = std::string(ip);
+        }
+        else{
+                con->ip = std::string{":Couldn't get ip:"};
+        }
+        return con;
+}
+
+void handle_read(Conn* con){
+        char rbuf[MAX] = {};
+        errno = 0;
+        int n = read(con->fd,&rbuf,MAX);
+        if(n<0 && errno&EINTR){
+                return;
+        }
+        if(n<0){
+                kill_this(con);
+                return;
+        }
+        
+        auto& reader = con->reader;
+        reader.insert(reader.end(),rbuf,rbuf+n);
+
+        if(reader.size()>=4){
+                int len = get_len(reader.begin());
+                if(reader.size()-4 >= len){
+                        process_request(con);
+                        reader.erase(reader.begin(),reader.begin()+4+len);
+                }
+        }
+}
 
 void handle_write(Conn* con);
