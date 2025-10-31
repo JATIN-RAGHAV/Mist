@@ -1,5 +1,4 @@
 #include "struct.hpp"
-#include <sstream>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <fcntl.h>

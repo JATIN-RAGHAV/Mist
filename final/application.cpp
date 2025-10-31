@@ -7,10 +7,10 @@
 #include <cctype>
 #include "common.cpp"
 #include "data.cpp"
+#include "debug.cpp"
 
 #define MAX 4096
-constexpr char FULL_BYTE = char((1<<8)-1);
-const std::string empty_sz = std::string("    ");
+const std::string empty_sz = std::string(4,' ');
 
 void kill_this(Conn* con){
         con->want_close = true;
@@ -22,7 +22,6 @@ void kill_this(Conn* con){
 
 void gen_response(std::string res,Conn* con){
         auto& writer = con->writer;
-        writer.push_back(FULL_BYTE);
 
         writer.insert(writer.end(),empty_sz.begin(),empty_sz.end());
         set_len(res.size(),writer.end()-4);
@@ -33,27 +32,28 @@ void gen_response(std::string res,Conn* con){
 
 void execute_command(std::vector<std::string>& cmd,Conn* con){
         std::transform(cmd[0].begin(),cmd[0].begin(),cmd[0].end(),::tolower);
+        std::cout<<"Handling a " <<cmd[0] <<" request from: " <<con->ip<<':'<<con->port<<'\n';
         if(cmd.size() == 2){
                 if(cmd[0] == "get"){
-                        if(data.count(cmd[1])){
-                                gen_response(data[cmd[1]],con);
+                        if(data.count(cmd[1]+con->ip)){
+                                gen_response(data[cmd[1]+con->ip],con);
                         }
                         else{
                                 kill_this(con);
                         }
                 }
                 else if(cmd[0] == "del"){
-                        data.erase(cmd[1]);
-                        gen_response("",con);
+                        data.erase(cmd[1]+con->ip);
+                        gen_response("done",con);
                 }
                 else{
                         kill_this(con);
                 }
                 return;
         }
-        if(cmd.size() == 3 && cmd[0] == "set"){
-                data[cmd[1]] = cmd[2];
-                gen_response("",con);
+        else if(cmd.size() == 3 && cmd[0] == "set"){
+                data[cmd[1]+con->ip] = cmd[2];
+                gen_response("done",con);
         }
         else{
                 kill_this(con);
@@ -64,7 +64,7 @@ void process_request(Conn* con){
         auto& reader = con->reader;
         int arg_cnt = get_len(reader.begin());
         std::vector<std::string>cmd;
-        auto it = reader.begin();
+        auto it = reader.begin()+4;
         while(it < reader.end()){
                 int len = get_len(it);
                 it+=4;
@@ -105,10 +105,6 @@ void handle_read(Conn* con){
                 return;
         }
         if(n<0){
-                kill_this(con);
-                return;
-        }
-        if(!n && !(errno&EINTR)){
                 kill_this(con);
                 return;
         }

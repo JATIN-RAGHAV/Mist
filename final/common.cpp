@@ -1,5 +1,6 @@
 #include <vector>
 #include <string>
+#include <algorithm>
 #ifndef CONN
 #define CONN
 struct Conn {
@@ -35,5 +36,29 @@ int get_len(std::vector<uint8_t>::iterator s){
                 s++;
         }
         return ans;
+}
+#endif
+
+#ifndef MAKE_CMD
+#define MAKE_CMD
+std::vector<uint8_t> make_cmd(std::string& s){
+        auto strt = s.begin();
+        std::cout<<s<<'\n';
+        while((*strt) == ' ')strt++;
+        std::vector<uint8_t> res(4,0);
+        std::vector<uint8_t> len;
+        while(strt<s.end()){
+                auto it = std::find(strt,s.end(),(uint8_t)' ');
+                len.assign(4,0);
+                set_len(it-strt,len.begin());
+                res.insert(res.end(),len.begin(),len.end());
+                while(strt < it){
+                        res.push_back(*strt);
+                        strt++;
+                }
+                strt = it+1;
+        }
+        set_len(res.size()-4,res.begin());
+        return res;
 }
 #endif

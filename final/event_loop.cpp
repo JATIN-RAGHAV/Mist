@@ -34,6 +34,8 @@ int main(){
                 exit(1);
         }
         
+        std::cout << "Server started to listen!!!\n";
+
         std::vector<Conn*> fds;
         std::vector<struct pollfd> poll_args;
         while(true){
@@ -48,7 +50,7 @@ int main(){
                                 client.events |= POLLIN;
                         }
                         if(fds[i]->want_write){
-                                client.revents |= POLLOUT;
+                                client.events |= POLLOUT;
                         }
                         poll_args.push_back(client);
                 }
@@ -82,12 +84,13 @@ int main(){
                                 handle_write(con);
                         }
                         
-                        if((result & POLLERR) || con->want_close){
+                        if((result & POLLERR) || con->want_close || (result & POLLHUP)){
                                 close(con->fd);
                                 std::cout << "Closing connection with: " << con->ip << ':' << con->port << ".\n";
                                 fds[con->fd] = NULL;
                                 free(con);
                         }
+
                 }
         }
 }
